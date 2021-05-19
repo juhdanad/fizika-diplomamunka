@@ -1,0 +1,311 @@
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Felharmonikuskeltés - fotonstatisztika</title>
+  <script src="https://unpkg.com/expr-eval@2.0.2/dist/bundle.js"></script>
+  <script src="https://cdn.plot.ly/plotly-1.35.2.min.js"></script>
+
+  <style>
+    input[type=text] {
+      width: 300px;
+    }
+
+    input {
+      padding: 6px;
+    }
+
+    body,
+    html,
+    input {
+      font-family: sans-serif;
+      font-size: 11pt;
+
+    }
+
+    form {
+      margin: 3px 0;
+    }
+
+    .input-whole {
+      display: flex;
+      align-items: start;
+    }
+
+    .input-column {
+      display: flex;
+      flex-direction: column;
+      align-items: end;
+      margin: 2px;
+      position: relative;
+    }
+
+    .input-cell {
+      display: flex;
+      align-items: center;
+    }
+
+    .slider {
+      margin: 0px;
+      padding: 2px;
+    }
+
+    .tab input {
+      display: none;
+    }
+
+    .tab input+label {
+      display: inline-block;
+      background-color: #EEEEEE;
+      border: 1px solid black;
+      padding: 3px;
+    }
+
+    .tab input:checked+label {
+      background-color: #BBBBBB;
+    }
+
+    .tip {
+      margin: 0px;
+      position: absolute;
+      width: 100%;
+      top: 100%;
+      left: 0px;
+      background-color: #fff8ea;
+      border: 1px solid black;
+      display: none;
+      padding: 6px;
+      box-sizing: border-box;
+    }
+
+    div:focus-within > .tip {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <form id="form" class="input-whole">
+    <div class="input-column">
+      <div class="input-cell" style="width: 100%;">
+        <input type="range" min="1" max="200" value="15" step="any" oninput="refreshInput()" class="slider" id="n-max"
+          style="flex-grow: 1;">
+        <label id="n-max-text" for="n-max" style="width: 10em;">N_max=1</label></div>
+      <div class="input-column">
+        <div class="input-cell">
+          <label for="n-in">Bemenő fotonstatisztika: N_n=</label>
+          <input type="text" id="n-in" value="delta(n-n_max)"></div>
+        <div class="input-cell">
+          <label for="p-n">Egyesülés esélye: p_n=</label>
+          <input type="text" id="p-n" value="a*n^b*exp(c*n)"></div>
+        <p class="tip">Használható változók: n, n_max, a, b, c, d<br>Használható függvények pl.:delta, theta, trigonometrikus függvények<br>a?b:c -> ha a igaz, b-t adja, különben c-t</p>
+      </div>
+    </div>
+    <div class="input-column" style="align-items: start;">
+      <div class="input-cell">
+        <input id="par-a" type="range" min="-1" max="1" value="1" step="any" oninput="refreshInput()" class="slider">
+        <label id="par-a-text" for="par-a">a=1</label></div>
+      <div class="input-cell">
+        <input id="par-b" type="range" min="-1" max="1" value="-1" step="any" oninput="refreshInput()" class="slider">
+        <label id="par-b-text" for="par-b">b=-1</label></div>
+      <div class="input-cell">
+        <input id="par-c" type="range" min="-1" max="1" value="0" step="any" oninput="refreshInput()" class="slider">
+        <label id="par-c-text" for="par-c">c=0</label></div>
+      <div class="input-cell">
+        <input id="par-d" type="range" min="-1" max="1" value="0" step="any" oninput="refreshInput()" class="slider">
+        <label id="par-d-text" for="par-d">d=0</label></div>
+    </div>
+    <div class="input-column">
+      <div class="input-cell">
+        <input type="submit" value="Számol">
+      </div>
+      <div class="input-cell">
+        <label for="auto-calc">Automatikus újraszámolás:</label>
+        <input id="auto-calc" type="checkbox" oninput="refreshInput()">
+      </div>
+    </div>
+  </form>
+  <p style="margin: 2px;color: #ae0000;">A bemenő fotonstatisztika automatikusan normálva van, hogy a valószínűségek
+    összege 1 legyen.</p>
+  <div>
+    <span class="tab">
+      <input id="radio1" value="1" name="plotType" type="radio" checked onclick="plot_type=1;updatePlot();">
+      <label for="radio1">N_n</label>
+      <input id="radio2" value="2" name="plotType" type="radio" onclick="plot_type=2;updatePlot();">
+      <label for="radio2">p_n</label>
+      <input id="radio3" value="3" name="plotType" type="radio" onclick="plot_type=3;updatePlot();">
+      <label for="radio3">kimenet</label>
+      <input id="radio4" value="4" name="plotType" type="radio" onclick="plot_type=4;updatePlot();">
+      <label for="radio4">megmaradó alapharmonikus</label>
+      <input id="radio5" value="5" name="plotType" type="radio" onclick="plot_type=5;updatePlot();">
+      <label for="radio5">hiányzó alapharmonikus</label>
+    </span>
+    <label for="log-checkbox">Log-skála</label>
+    <input type="checkbox" id="log-checkbox" oninput="updatePlot()">
+  </div>
+  <div id="plot"></div>
+  <p>
+    Diagram könyvtár: <a href="https://plot.ly/javascript/">Plotly</a><br>
+    Matematika könyvtár: <a href="https://github.com/silentmatt/expr-eval">expr-eval</a>
+  </p>
+  <!--Load WASM module-->
+  <script type="module">
+    import init, { set_panic_hook, set_input, get_in_dist, get_p_merge, get_total_chance, get_total_chance_no_ones, get_output, get_remain, get_missing } from './fotonok/fotonok.js';
+    async function run() {
+      await init();
+      set_panic_hook();
+      window.wasm = {
+        set_input: set_input,
+        get_in_dist: get_in_dist,
+        get_p_merge: get_p_merge,
+        get_total_chance: get_total_chance,
+        get_total_chance_no_ones: get_total_chance_no_ones,
+        get_output: get_output,
+        get_remain: get_remain,
+        get_missing: get_missing,
+      };
+    }
+    run();
+  </script>
+  <script>
+    window.log_scale = false;
+    window.plot_type = 1;
+    window.plot_x_data = [];
+    /*window.plot_p_n_data = [];
+    window.plot_N_out_data = [];
+    window.plot_remain_percent_data = [];*/
+
+    function updatePlot() {
+      var data = [];
+      var layout = {
+        autosize: true,
+        yaxis: {
+          automargin: true
+        },
+        xaxis: {
+          automargin: true
+        }
+      };
+      if (document.getElementById("log-checkbox").checked) {
+        layout.yaxis.type = "log";
+      }
+      switch (plot_type) {
+        case 1:
+          layout.xaxis.title = 'Egyszerre bemenő fotonok száma';
+          layout.yaxis.title = 'Valószínűség';
+          data = [{
+            x: plot_x_data,
+            y: wasm.get_in_dist(),
+            type: 'scattergl',
+            mode: 'markers'
+          }]
+          break;
+        case 2:
+          layout.xaxis.title = 'Egyesülő fotonok száma';
+          layout.yaxis.title = 'Egyesülés esélye';
+          data = [{
+            x: plot_x_data.slice(1),
+            y: wasm.get_p_merge().slice(1),
+            type: 'scattergl',
+            mode: 'markers'
+          }]
+          break;
+        case 3:
+          layout.xaxis.title = 'Felharmonikus';
+          layout.yaxis.title = 'Fotonszám várható érték';
+          data = [{
+            x: plot_x_data.slice(1),
+            y: wasm.get_output().slice(1),
+            type: 'scattergl',
+            mode: 'markers'
+          }]
+          break;
+        case 4:
+          layout.xaxis.title = 'Egyszerre kimenő alapharmonikus fotonok száma';
+          layout.yaxis.title = 'Valószínűség';
+          data = [{
+            x: plot_x_data,
+            y: wasm.get_remain(),
+            type: 'scattergl',
+            mode: 'markers'
+          }]
+          break;
+        case 5:
+          layout.xaxis.title = 'Elnyelt energia / hiányzó alapharmonikus';
+          layout.yaxis.title = 'Valószínűség';
+          data = [{
+            x: plot_x_data,
+            y: wasm.get_missing(),
+            type: 'scattergl',
+            mode: 'markers'
+          }]
+          break;
+      }
+      Plotly.react('plot', data, layout, { responsive: true });
+    }
+
+    function refreshInput(recalc) {
+      var n_max_val = Number(document.getElementById("n-max").value);
+      n_max_val = Math.max(1, Math.round(n_max_val * n_max_val));
+      document.getElementById('n-max-text').textContent = "n_max = " + n_max_val;
+      var a_val = Number(document.getElementById("par-a").value);
+      document.getElementById('par-a-text').textContent = "a = " + a_val;
+      var b_val = Number(document.getElementById("par-b").value);
+      document.getElementById('par-b-text').textContent = "b = " + b_val;
+      var c_val = Number(document.getElementById("par-c").value);
+      document.getElementById('par-c-text').textContent = "c = " + c_val;
+      var d_val = Number(document.getElementById("par-d").value);
+      document.getElementById('par-d-text').textContent = "d = " + d_val;
+      if (recalc || document.getElementById("auto-calc").checked) {
+        recalculate();
+      }
+    }
+    refreshInput();
+
+    function recalculate() {
+      try {
+        var n_max_val = Number(document.getElementById("n-max").value);
+        n_max_val = Math.max(1, Math.round(n_max_val * n_max_val));
+        var a_val = Number(document.getElementById("par-a").value);
+        var b_val = Number(document.getElementById("par-b").value);
+        var c_val = Number(document.getElementById("par-c").value);
+        var d_val = Number(document.getElementById("par-d").value);
+        var n_max_val = Number(document.getElementById("n-max").value);
+        n_max_val = Math.max(1, Math.round(n_max_val * n_max_val));
+        var parser = new exprEval.Parser();
+        parser.functions.delta = function (arg) { return (arg == 0) ? 1 : 0; };
+        parser.functions.theta = function (arg) { return (arg >= 0) ? 1 : 0; };
+        const N_in_func = parser.parse(document.getElementById('n-in').value).toJSFunction("n", { a: a_val, b: b_val, c: c_val, d: d_val, n_max: n_max_val });
+        const p_n_func = parser.parse(document.getElementById('p-n').value).toJSFunction("n", { a: a_val, b: b_val, c: c_val, d: d_val, n_max: n_max_val });
+        plot_x_data = new Array(n_max_val + 1).fill(0);
+        var plot_N_in_data = plot_x_data.slice()
+        var plot_p_n_data = plot_x_data.slice()
+        var n_in_sum = 0;
+        for (i = 0, len = plot_x_data.length; i < len; i++) {
+          plot_x_data[i] = i;
+          plot_N_in_data[i] = N_in_func(i) || 0;
+          n_in_sum += plot_N_in_data[i];
+        }
+        for (i = 0, len = plot_x_data.length; i < len; i++) {
+          plot_N_in_data[i] /= n_in_sum;
+        }
+        for (i = 1, len = plot_x_data.length; i < len; i++) {
+          plot_p_n_data[i] = p_n_func(i) || 0;
+        }
+        wasm.set_input(Float64Array.from(plot_N_in_data), Float64Array.from(plot_p_n_data));
+        updatePlot();
+      }
+      catch (err) {
+        console.error(err)
+        alert(err)
+      }
+    }
+
+    document.getElementById('form').onsubmit = function (event) {
+      event.preventDefault();
+      recalculate(true);
+    }
+  </script>
+</body>
+
+</html>

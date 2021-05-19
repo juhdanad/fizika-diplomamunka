@@ -1,0 +1,15 @@
+{
+  "name": "diplomamunka",
+  "collaborators": [
+    "Dániel Juhász"
+  ],
+  "version": "0.1.0",
+  "files": [
+    "diplomamunka_bg.wasm",
+    "diplomamunka.js",
+    "diplomamunka.d.ts"
+  ],
+  "module": "diplomamunka.js",
+  "types": "diplomamunka.d.ts",
+  "sideEffects": false
+}
